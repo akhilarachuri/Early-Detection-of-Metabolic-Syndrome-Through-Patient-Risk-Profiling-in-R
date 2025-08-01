@@ -1,0 +1,248 @@
+---
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+<h2 style="text-align: center; color: steelblue;">Metabolic Syndrome Risk Analysis</strong></h2>
+
+##### Metabolic Syndrome is a cluster of conditions, including high blood pressure, high blood sugar, excess body fat around the waist, and abnormal cholesterol or triglyceride levels, that together increase the risk of heart disease, stroke, and type 2 diabetes. Early detection is critical for prevention and better health outcomes.
+
+##### This project aims to uncover key health indicators associated with Metabolic Syndrome by analyzing patient data. Through a combination of data cleaning, exploratory analysis, and risk factor modeling, we examine patterns in variables such as age, BMI, blood glucose, HDL cholesterol, and triglycerides. Patients are then grouped based on their risk levels to highlight early warning signs.
+
+#### Data Source : https://data.world/informatics-edu/metabolic-syndrome-prediction
+
+
+<span style="color:steelblue; font-size: 18px;"><strong>Extracting Data</strong></span>
+
+- The dataset is imported into R using read.csv() to begin the analysis.
+- I used glimpse() to get a quick summary of the dataset’s structure, including variable names, types, and sample values.
+
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+data <- read.csv("/Users/akhilarachuri/Documents/R Project/Metabolic Syndrome.csv")
+glimpse(data)
+```
+
+```{r}
+data$MetabolicSyndrome <- as.factor(data$MetabolicSyndrome)
+data$Marital <- as.factor(data$Marital)
+data$Sex <- as.factor(data$Sex)
+data$Race <- as.factor(data$Race)
+data$Albuminuria <- as.factor(data$Albuminuria)
+summary(data)
+```
+
+<span style="color:steelblue; font-size: 18px;"><strong>Data Cleaning</strong></span>
+
+- Checked for duplicates - found none
+- Checked for null values - found 228. 
+
+```{r}
+sum(duplicated(data))
+sum(is.na(data) | data == "")
+```
+
+**Checked the sum of null values in each column**
+
+```{r}
+colSums(is.na(data) | data == "")
+```
+**Checked for Outliers**
+
+- The **Boxplot of Waist Circumference** shows a symmetric distribution with several high-value outliers above the upper whisker, indicating some individuals have significantly larger waist sizes than the typical range.
+- The **Boxplot of BMI** reveals a right-skewed distribution with many outliers on the higher end, suggesting a portion of the population has unusually high BMI values compared to the median.
+
+```{r}
+boxplot(data$WaistCirc, main = "Boxplot of Waist Circumference",col = "lightblue")
+boxplot(data$BMI, main = "Boxplot of BMI",col = "lightgreen")
+boxplot(data$Income, main = "Boxplot of Income",col = "steelblue")
+```
+
+**Outlier Removal Using IQR Method**
+
+```{r}
+Q1_waist <- quantile(data$WaistCirc, 0.25, na.rm = TRUE)
+Q3_waist <- quantile(data$WaistCirc, 0.75, na.rm = TRUE)
+IQR_waist <- Q3_waist - Q1_waist
+lower_waist <- Q1_waist - 1.5 * IQR_waist
+upper_waist <- Q3_waist + 1.5 * IQR_waist
+Q1_bmi <- quantile(data$BMI, 0.25, na.rm = TRUE)
+Q3_bmi <- quantile(data$BMI, 0.75, na.rm = TRUE)
+IQR_bmi <- Q3_bmi - Q1_bmi
+lower_bmi <- Q1_bmi - 1.5 * IQR_bmi
+upper_bmi <- Q3_bmi + 1.5 * IQR_bmi
+data <- data %>%
+  filter(
+    WaistCirc >= lower_waist & WaistCirc <= upper_waist,
+    BMI >= lower_bmi & BMI <= upper_bmi
+  )
+```
+
+
+**Handling Missing Values Using Mean and Median Imputation**
+
+```{r}
+data$Income[is.na(data$Income)] <- median(data$Income, na.rm = TRUE)
+data$WaistCirc[is.na(data$WaistCirc)] <- mean(data$WaistCirc, na.rm = TRUE)
+data$BMI[is.na(data$BMI)] <- mean(data$BMI, na.rm = TRUE)
+```
+
+
+
+- Again Checked for null values - found none. 
+```{r}
+sum(is.na(data))
+```
+
+- Removed rows with missing Marital values from the data
+```{r}
+data <- data %>%
+  filter(!is.na(Marital), Marital != "")
+``` 
+
+          
+<span style="color:steelblue; font-size: 18px;"><strong>Exploratory Data Analysis</strong></span>
+
+**Joint Density of BMI and Blood Glucose by Metabolic Syndrome**
+
+- The Metabolic Syndrome group (red contours) peak density lies approximately in the BMI range of 30–35 and glucose range of 100–120, which are clinical indicators of obesity and impaired glucose metabolism.
+- The Non Metabolic Syndrome group (blue contours) is more concentrated around BMI 22–28 and glucose 80–100, a healthier metabolic range.
+
+```{r}
+ggplot(data, aes(x = BMI, y = BloodGlucose, color = MetabolicSyndrome)) +
+  geom_density2d() +
+  labs(x = "BMI (kg/m²)", y = "Blood Glucose (mg/dL)", title = "Joint Density of BMI and Blood Glucose by Metabolic Syndrome") +
+  theme_bw()
+```
+
+**Scatter Plot with Clinical Threshold Lines**
+
+- Vertical at HDL = 45 mg/dL -> clinical threshold for low HDL and Horizontal at Triglycerides = 150 mg/dL -> clinical threshold for high triglycerides
+- Metabolic Syndrome is concentrated in the high-risk zone,  where HDL < 45 and Triglycerides > 150.
+- Non Metabolic Syndrome patients are mostly clustered in the safer bottom-right quadrant.
+```{r}
+ggplot(data, aes(x = HDL, y = Triglycerides, color = MetabolicSyndrome)) +
+  geom_point(alpha = 0.5) +
+  geom_vline(xintercept = 45, linetype = "dashed", color = "red") +
+  geom_hline(yintercept = 150, linetype = "dashed", color = "red") +
+  labs(x = "HDL (mg/dL)", y = "Triglycerides (mg/dL)", title = "Triglycerides vs HDL with Risk Thresholds") +
+  theme_bw()
+```
+
+**Metabolic Syndrome by Gender and Marital Status**
+
+- Widowed females and divorced males have highest Metabolic Syndrome rates.
+- Single males/females show lowest Metabolic Syndrome proportions.
+
+```{r}
+data$MetabolicSyndrome <- ifelse(data$MetabolicSyndrome == "MetSyn", "MetSyn", "No MetSyn")
+ggplot(data %>% filter(!is.na(MetabolicSyndrome)), 
+       aes(x = Sex, fill = MetabolicSyndrome)) +
+  geom_bar(position = "fill") +
+  facet_wrap(~ Marital) +
+  labs(
+    title = "Proportion of Metabolic Syndrome by Sex and Marital Status",
+    x = "Sex", y = "Proportion",
+    fill = "Metabolic Syndrome"
+  ) +
+  theme_bw()
+```
+
+**Metabolic Syndrome by Risk Factor Count**
+
+- As the number of risk factors increases (e.g., high BMI, low HDL, high glucose, high triglycerides), the proportion of patients with Metabolic Syndrome (red) also increases sharply.
+- 0–1 risk factors: Almost all patients do not have Metabolic Syndrome
+- 2 risk factors: There's a balanced split between those with and without Metabolic Syndrome
+- 3–4 risk factors: Nearly all patients have Metabolic Syndrome
+
+
+```{r}
+RiskFactors <- with(data,
+  (BMI > 30) + (HDL < 45) + (BloodGlucose > 100) + (Triglycerides > 150))
+ggplot(data, aes(x = factor(RiskFactors), fill = MetabolicSyndrome)) +
+  geom_bar(position = "fill") +
+  labs(title = "Proportion of Metabolic Syndrome by Number of Risk Factors",
+       x = "Number of metabolic risk factors per person", y = "Proportion") +
+  theme_bw()
+```
+
+**Waist Circumference vs Uric Acid by MetSyn Group**
+
+- Most Metabolic Syndrome patients often have waists over 100 cm and have uric acid levels clustered toward the upper normal range, around 5–7 mg/dL.
+- This highlights a combination of abdominal obesity and a bit of raised uric acid.
+- Most people without Metabolic Syndrome have waist sizes around 80–110 cm and keep their uric acid under 7 mg/dL, both below clinical risk cutoffs, showing a stable, healthy profile.
+- Uric acid levels are slightly elevated in Metabolic Syndrome patients compared to Non Metabolic Syndrome, though overlap exists this indicates a potential contributing factor rather than a clear-cut discriminator.
+```{r}
+ggplot(data, aes(x = WaistCirc, y = UricAcid)) +
+  geom_point(alpha = 0.5, color = "steelblue") +
+  facet_wrap(~ MetabolicSyndrome) +
+  labs(title = "Waist Circ vs Uric Acid by Metabolic Syndrome",
+       x = "Waist Circumference (cm)", y = "Uric Acid (mg/dL)") +
+  theme_bw()
+```
+
+**Key Predictors of Metabolic Syndrome**
+
+- Waist Circumference, BMI, Triglycerides, and Blood Glucose show strong positive correlations with Metabolic Syndrome, indicating that higher values in these features significantly increase the likelihood of having the condition.
+- HDL (good cholesterol) has a strong negative correlation, meaning lower HDL levels are closely associated with the presence of Metabolic Syndrome, making it an important factor in identifying increased risk.
+
+```{r}
+# Transformation of traget variable into 0 and 1
+data$MetabolicSyndrome <- ifelse(data$MetabolicSyndrome == "MetSyn", 1, 0)
+numeric_data <- data %>%
+  select(where(is.numeric))
+cor_matrix <- cor(numeric_data)
+cor_target <- cor_matrix[, "MetabolicSyndrome"]
+cor_df <- data.frame(
+  Feature = names(cor_target),
+  Correlation = cor_target)
+cor_df <- cor_df %>% filter(Feature != "MetabolicSyndrome")
+ggplot(cor_df, aes(x = reorder(Feature, Correlation), y = Correlation, fill = Correlation)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  scale_fill_gradient2(low = "red", mid = "white", high = "steelblue", midpoint = 0) +
+  labs(title = "Feature Correlation with Metabolic Syndrome",
+       x = "Feature", y = "Correlation") +
+  theme_bw()
+```
+
+
+<span style="color:steelblue; font-size: 18px;"><strong>Predictive Modeling</strong></span>
+
+- Based on the above Correlation plot, top features with the strongest positive and negative correlation to Metabolic Syndrome (such as BMI, Waist Circumference, Triglycerides, Blood Glucose, and HDL) were identified as the most influential variables for prediction.
+- These selected features were used to train a decision tree model, which visually captured how combinations of clinical markers contribute to Metabolic Syndrome risk, enabling clear and interpretable rule-based classification.
+
+```{r setup, message=FALSE, warning=FALSE}
+library(rpart)
+library(rpart.plot)
+library(caret)
+set.seed(123)
+data_split <- sample(1:nrow(data), 0.8 * nrow(data))
+train <- data[data_split, ]
+test <- data[-data_split, ]
+fit <- rpart(MetabolicSyndrome ~ BMI + HDL + Triglycerides + BloodGlucose + WaistCirc, data = train, method = "class")
+print(fit$variable.importance)
+pred <- predict(fit, newdata = test, type = "class")
+accuracy <- sum(pred == test$MetabolicSyndrome) / length(pred)
+print(paste("Decision Tree Accuracy:", round(accuracy*100,2), "%"))
+rpart.plot(fit, main = "Decision Tree for Metabolic Syndrome Risk",type = 4,box.palette = "Blues",shadow.col = "gray")
+```
+
+
+**1.Blood Glucose is the Primary Split:**
+
+- The first and most important factor in predicting Metabolic Syndrome is whether blood glucose is above or below 100 mg/dL, a clear indicator of risk.
+
+**2.High Triglycerides and Waist Circumference Increase Risk:**
+
+- Patients with high triglycerides (≥145 or ≥153) and larger waist circumference (≥100 or ≥102) are more likely to have Metabolic Syndrome, as shown by the high probabilities in the leaf nodes on the right side of the tree.
+
+```{r}
+view(data)
+```
